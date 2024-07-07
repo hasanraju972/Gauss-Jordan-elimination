@@ -1,0 +1,195 @@
+import numpy as np
+import tkinter as tk
+from tkinter import ttk, messagebox
+from ttkthemes import ThemedStyle
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import time
+
+# Define a threshold for considering values as zero
+EPSILON = 1e-10
+
+
+def gauss_jordan(A, b):
+    n = len(A)
+    steps = []  # List to store step-wise results and operations
+    steps.append(("Initial", np.copy(A), np.copy(b)))  # Initial step (before elimination)
+
+    for i in range(n):
+        if np.abs(A[i][i]) < EPSILON:
+            raise ValueError("Zero division error: Pivot element is zero or close to zero")
+
+        # Normalize the pivot row
+        pivot = A[i][i]
+        for j in range(i, n):
+            A[i][j] /= pivot
+        b[i] /= pivot
+        steps.append((f"Row {i + 1} /= {pivot}", np.copy(A), np.copy(b)))  # Store normalization step
+
+        for j in range(n):
+            if i != j:
+                factor = A[j][i]
+                for k in range(i, n):
+                    A[j][k] -= factor * A[i][k]
+                b[j] -= factor * b[i]
+                steps.append(
+                    (f"Row {j + 1} -= {factor} * Row {i + 1}", np.copy(A), np.copy(b)))  # Store elimination step
+
+    x = b
+    steps.append(("Final Solution", x))  # Store final solution
+    return steps
+
+
+# Your existing code continues from here...
+
+def update_coefficient_fields():
+    global entry_A, entry_b, n
+
+    coefficient_value = entry_coefficient.get()
+
+    if coefficient_value.isdigit() and int(coefficient_value) > 0:
+        n = int(coefficient_value)
+
+        for widget in frame_left.winfo_children():
+            widget.destroy()
+
+        tk.Label(frame_left, text="Enter coefficients A:", font=("Arial", 12, "bold")).grid(row=0, column=0,
+                                                                                            columnspan=n + 1,
+                                                                                            sticky="w")
+        tk.Label(frame_left, text="Enter Constants b:", font=("Arial", 12, "bold")).grid(row=n + 1, column=0,
+                                                                                         columnspan=n + 1,
+                                                                                         sticky="w")
+
+        entry_A = [[tk.Entry(frame_left, width=10, font=("Arial", 10)) for _ in range(n)] for _ in range(n)]
+        entry_b = [tk.Entry(frame_left, width=10, font=("Arial", 10)) for _ in range(n)]
+
+        for i in range(n):
+            for j in range(n):
+                entry_A[i][j].grid(row=i + 1, column=j + 1)
+            entry_b[i].grid(row=n + 2, column=i + 1)
+    else:
+        messagebox.showerror("Error", "Invalid coefficient number. Please enter a positive integer.")
+
+
+def solve_system():
+    try:
+        start_time = time.time()
+
+        A = np.array([[float(entry_A[i][j].get()) for j in range(n)] for i in range(n)])
+        b = np.array([float(entry_b[i].get()) for i in range(n)])
+        steps = gauss_jordan(A, b)
+
+        output_text.config(state=tk.NORMAL)
+        output_text.delete('1.0', tk.END)
+
+        # Display intermediate steps
+        for i, (operation, step_A, step_b) in enumerate(steps[:-1]):
+            output_text.insert(tk.END, f"Step {i + 1} ({operation}):\n")
+            output_text.insert(tk.END, "A:\n")
+            output_text.insert(tk.END, np.array2string(step_A, precision=6, separator=', ') + "\n")
+            output_text.insert(tk.END, "b:\n")
+            output_text.insert(tk.END, np.array2string(step_b, precision=6, separator=', ') + "\n\n")
+
+        # Display final solution
+        operation, x = steps[-1]
+        output_text.insert(tk.END, f"{operation}:\n")
+        for i, xi in enumerate(x):
+            output_text.insert(tk.END, f"x{i + 1} = {xi:.6f}\n")
+
+        output_text.config(state=tk.DISABLED)
+
+        # Plot matrices, vectors, and solutions
+        plot_matrices(A, b, x)
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Execution Time: {execution_time} seconds")
+
+    except Exception as e:
+        output_text.config(state=tk.NORMAL)
+        output_text.delete('1.0', tk.END)
+        output_text.insert(tk.END, f"Error: {str(e)}\n")
+        output_text.config(state=tk.DISABLED)
+
+
+def clear_entries():
+    for i in range(n):
+        for j in range(n):
+            entry_A[i][j].delete(0, tk.END)
+        entry_b[i].delete(0, tk.END)
+    output_text.config(state=tk.NORMAL)
+    output_text.delete('1.0', tk.END)
+    output_text.config(state=tk.DISABLED)
+
+
+def create_gui():
+    global entry_coefficient, frame_left, entry_A, entry_b, output_text, n
+
+    root = tk.Tk()
+    root.title("Gauss-Jordan Solver")
+    root.configure(background="#E6F7FF")
+
+    style = ThemedStyle(root)
+    style.set_theme("equilux")  # Set default theme
+
+    frame_left = ttk.Frame(root)
+    frame_left.grid(row=0, column=0, padx=10, pady=10)
+
+    frame_mid = ttk.Frame(root)
+    frame_mid.grid(row=0, column=1, padx=10, pady=10)
+
+    frame_right = ttk.Frame(root)
+    frame_right.grid(row=0, column=2, padx=10, pady=10)
+
+    tk.Label(frame_left, text="Coefficient Number:", font=("Arial", 12, "bold")).grid(row=0, column=0, sticky="w")
+    entry_coefficient = tk.Entry(frame_left, width=5, font=("Arial", 10))
+    entry_coefficient.grid(row=0, column=1, padx=5, pady=5)
+
+    button_frame = ttk.Frame(frame_left)
+    button_frame.grid(row=0, column=2, pady=5)
+
+    ttk.Button(button_frame, text="Enter", command=update_coefficient_fields).pack()
+
+    output_text = tk.Text(frame_right, width=50, height=20, font=("Arial", 10))
+    output_text.config(state=tk.DISABLED)
+    output_text.grid(row=0, column=0)
+
+    ttk.Button(frame_right, text="Solve", command=solve_system).grid(row=1, column=0, pady=5)
+    ttk.Button(frame_right, text="Clear", command=clear_entries).grid(row=2, column=0, pady=5)
+
+    root.mainloop()
+
+
+def plot_matrices(A, b, x):
+    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+
+    # Plot Matrix A
+    axs[0].imshow(A, cmap='viridis', aspect='auto')  # Ensure correct aspect ratio
+    axs[0].set_title('Matrix A')
+    axs[0].set_xlabel('Column Index')
+    axs[0].set_ylabel('Row Index')
+    axs[0].xaxis.set_ticks_position('none')  # Remove x-axis ticks
+    axs[0].yaxis.set_ticks_position('none')  # Remove y-axis ticks
+
+    # Plot Vector b
+    axs[1].bar(np.arange(len(b)), b, color='skyblue')
+    axs[1].set_title('Vector b')
+    axs[1].set_xlabel('Index')
+    axs[1].set_ylabel('Value')
+    axs[1].xaxis.set_ticks_position('none')  # Remove x-axis ticks
+    axs[1].yaxis.set_ticks_position('none')  # Remove y-axis ticks
+
+    # Plot Solution Vector x
+    axs[2].bar(np.arange(len(x)), x, color='lightgreen')
+    axs[2].set_title('Solution Vector x')
+    axs[2].set_xlabel('Index')
+    axs[2].set_ylabel('Value')
+    axs[2].xaxis.set_ticks_position('none')  # Remove x-axis ticks
+    axs[2].yaxis.set_ticks_position('none')  # Remove y-axis ticks
+
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    create_gui()
